@@ -1003,7 +1003,7 @@
         {
           "name": "LiveTV",
           "urls": [
-            "proxy://do=live&type=txt&ext=aHR0cDovL2tsYXBwLmh1YXJlbnR2anAubWwvdHZib3gvbGl2ZS50eHQ="
+            "proxy://do=live&type=txt&ext="
           ]
         }
       ]
@@ -1899,5 +1899,5 @@
     "cdnjs.hnfenxun.com",
     "cms.qdwght.com"
   ],
-  "spider": "clan://localhost/tvbox/jp.jar"
+  "spider": "https://github.com/leox599/placeforme/blob/9918518585088c1c57819664333c476c0be8f9c6/jp.jar"
 }
