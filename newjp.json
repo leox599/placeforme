@@ -10,6 +10,16 @@
       "filterable":0
      },
        {
+      "key": "黑木耳资源",
+      "name": "黑木耳资源(切)",
+      "type": 1,
+      "api": "https://www.heimuer.tv/api.php/provide/vod/",
+      "playUrl": "",
+      "searchable": 1,
+      "quickSearch": 1,
+      "filterable": 0
+    },
+      {
       "key": "量子资源",
       "name": "量子资源(切)",
       "type": 1,
