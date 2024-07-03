@@ -9,6 +9,16 @@
       "quickSearch":1,
       "filterable":0
      },
+      "sites": [
+     {"key":"海外吧",
+      "name":"海外吧",
+      "type":1,
+      "api":"https://hw8.live/api.php/provide/vod/",
+      "playUrl": "",
+      "searchable":1,
+      "quickSearch":1,
+      "filterable":0
+     },
        {
       "key": "黑木耳资源",
       "name": "黑木耳资源(切)",
