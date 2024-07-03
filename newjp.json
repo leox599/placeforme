@@ -28,6 +28,15 @@
       "quickSearch": 1,
       "filterable": 0
     },
+     {"key":"360资源",
+      "name":"360资源",
+      "type":1,
+      "api":"https://360zy.com/api.php/provide/vod/",
+      "playUrl": "",
+      "searchable":1,
+      "quickSearch":1,
+      "filterable":0
+     },
       {
       "key": "量子资源",
       "name": "量子资源(切)",
