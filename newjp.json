@@ -66,21 +66,20 @@
       "quickSearch": 1,
       "filterable": 0
     },
-     {
-      "key": "量子|点播",
-      "name": "量子|点播",
-      "type": 1,
-      "api": "https://cj.lziapi.com/api.php/provide/vod/",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 0
-    },
-       {
+    {
       "key": "索尼资源",
       "name": "索尼资源(切)",
       "type": 1,
       "api": "https://suoniapi.com/api.php/provide/vod/",
-      "playUrl": "http://qgg.732959.xyz/m3u8.php?url=",
+      "searchable": 1,
+      "quickSearch": 1,
+      "filterable": 0
+    },
+     {
+      "key": "量子|点播失效",
+      "name": "量子|点播失效",
+      "type": 1,
+      "api": "https://cj.lziapi.com/api.php/provide/vod/",
       "searchable": 1,
       "quickSearch": 1,
       "filterable": 0
