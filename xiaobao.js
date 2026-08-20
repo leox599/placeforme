@@ -1,6 +1,6 @@
 /**
  * XPTV 扩展插件 - 小宝影院 (xiaobaotv.tv)
- * 适配模板：MYTheme
+ * 适配标准: XPTV JS API
  */
 
 const cheerio = createCheerio()
@@ -14,34 +14,27 @@ const DEFAULT_HEADERS = {
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
 }
 
-let appConfig = {
-    ver: 1,
-    title: '小宝影院',
-    site: BASE_URL,
-    tabs: [
-        { name: '电影', ext: { id: '1' } },
-        { name: '电视剧', ext: { id: '2' } },
-        { name: '综艺', ext: { id: '3' } },
-        { name: '动漫', ext: { id: '4' } },
-        { name: '短剧', ext: { id: '5' } }
-    ]
+// 1. 首页与分类配置 [XPTV 规范: home()]
+async function home() {
+    return jsonify({
+        class: [
+            { type_id: '1', type_name: '电影' },
+            { type_id: '2', type_name: '电视剧' },
+            { type_id: '3', type_name: '综艺' },
+            { type_id: '4', type_name: '动漫' },
+            { type_id: '5', type_name: '短剧' }
+        ]
+    })
 }
 
-// 1. 配置入口
-async function getConfig() {
-    return jsonify(appConfig)
-}
-
-// 2. 获取分类列表
-async function getCards(ext) {
-    ext = argsify(ext)
-    let cards = []
-    let { id, page = 1 } = ext
-    let url = `${BASE_URL}/movie/type/${id}.html`
-    if (page > 1) {
-        url = `${BASE_URL}/movie/type/${id}/page/${page}.html`
+// 2. 分类列表 [XPTV 规范: category(tid, pg, filter, extend)]
+async function category(tid, pg = 1, filter, extend) {
+    let url = `${BASE_URL}/movie/type/${tid}.html`
+    if (parseInt(pg) > 1) {
+        url = `${BASE_URL}/movie/type/${tid}/page/${pg}.html`
     }
 
+    let cards = []
     try {
         const { data } = await $fetch.get(url, { headers: DEFAULT_HEADERS })
         const $ = cheerio.load(data)
@@ -52,85 +45,83 @@ async function getCards(ext) {
             const title = $a.attr('title') || $item.find('.title a').text().trim()
             const href = $a.attr('href')
             const pic = $item.find('.myui-vodlist__thumb').attr('data-original') || $item.find('img').attr('src')
-            const remarks = $item.find('.pic-text').text().trim() || $item.find('.text-muted').text().trim()
+            const remarks = $item.find('.pic-text').text().trim()
 
             if (title && href) {
                 cards.push({
                     vod_id: href,
                     vod_name: title,
                     vod_pic: pic && pic.startsWith('/') ? BASE_URL + pic : pic,
-                    vod_remarks: remarks,
-                    ext: { id: href }
+                    vod_remarks: remarks
                 })
             }
         })
     } catch (e) {
-        $print(`getCards Error: ${e}`)
+        $print(`category Error: ${e}`)
     }
 
-    return jsonify({ list: cards })
+    return jsonify({
+        page: parseInt(pg),
+        pagecount: 99,
+        limit: cards.length,
+        total: 999,
+        list: cards
+    })
 }
 
-// 3. 获取选集列表
-async function getTracks(ext) {
-    ext = argsify(ext)
-    let id = ext.id
+// 3. 详情与选集 [XPTV 规范: detail(id)]
+async function detail(id) {
     let detailUrl = id.startsWith('http') ? id : `${BASE_URL}${id}`
-    let tracks = []
+    let playFrom = []
+    let playList = []
 
     try {
         const { data } = await $fetch.get(detailUrl, { headers: DEFAULT_HEADERS })
         const $ = cheerio.load(data)
 
-        // MYTheme 常见的播放列表容器
+        let tracks = []
         $('.myui-content__list li a, .playlist li a').each((i, el) => {
             const name = $(el).text().trim()
             const href = $(el).attr('href')
             if (name && href) {
-                tracks.push({
-                    name: name,
-                    pan: '',
-                    ext: { playUrl: href }
-                })
+                tracks.push(`${name}$${href}`)
             }
         })
 
-        // 如果详情页直接提供了“立即播放”按钮，提取默认播放入口
         if (tracks.length === 0) {
             const playBtn = $('a.btn-warm').attr('href')
             if (playBtn) {
-                tracks.push({
-                    name: '播放正片',
-                    pan: '',
-                    ext: { playUrl: playBtn }
-                })
+                tracks.push(`立即播放$${playBtn}`)
             }
         }
-    } catch (e) {
-        $print(`getTracks Error: ${e}`)
-    }
 
-    return jsonify({
-        list: [
-            {
-                title: '默认线路',
-                tracks: tracks
-            }
-        ]
-    })
+        playFrom.push('小宝影院')
+        playList.push(tracks.join('#'))
+
+        const vod = {
+            vod_id: id,
+            vod_name: $('.myui-content__detail .title').text().trim() || $('title').text().split('-')[0].trim(),
+            vod_pic: $('.myui-content__thumb .lazyload').attr('data-original'),
+            vod_play_from: playFrom.join('$$$'),
+            vod_play_url: playList.join('$$$')
+        }
+
+        return jsonify({ list: [vod] })
+    } catch (e) {
+        $print(`detail Error: ${e}`)
+        return jsonify({ list: [] })
+    }
 }
 
-// 4. 获取播放直链
-async function getPlayinfo(ext) {
-    ext = argsify(ext)
-    let playUrl = ext.playUrl
-    let url = playUrl.startsWith('http') ? playUrl : `${BASE_URL}${playUrl}`
+// 4. 获取播放直链 [XPTV 规范: play(flag, id, flags)]
+async function play(flag, id, flags) {
+    let url = id.startsWith('http') ? id : `${BASE_URL}${id}`
     let realVideoUrl = ''
 
     try {
         const { data } = await $fetch.get(url, { headers: DEFAULT_HEADERS })
 
-        // 1. 匹配 maccms 变量（maccms/player_aaaa/player_data）
+        // 提取 player_aaaa / player_data 变量
         const match = data.match(/var\s+(?:player_aaaa|player_data)\s*=\s*(\{.*?\});/)
         if (match && match[1]) {
             const playConfig = argsify(match[1])
@@ -151,7 +142,7 @@ async function getPlayinfo(ext) {
             }
         }
 
-        // 2. MYTheme 模版备用：寻找 iframe
+        // 备用抓取 iframe 接口
         if (!realVideoUrl) {
             const $ = cheerio.load(data)
             const iframeSrc = $('iframe').attr('src')
@@ -164,22 +155,22 @@ async function getPlayinfo(ext) {
             }
         }
     } catch (e) {
-        $print(`getPlayinfo Error: ${e}`)
+        $print(`play Error: ${e}`)
     }
 
     return jsonify({
-        urls: [realVideoUrl],
-        headers: {
+        parse: 0,
+        url: realVideoUrl,
+        header: {
             'User-Agent': UA,
             'Referer': BASE_URL + '/'
         }
     })
 }
 
-// 5. 搜索功能（精准适配你提供的搜索 HTML 选择器）
-async function search(ext) {
-    ext = argsify(ext)
-    let text = encodeURIComponent(ext.text)
+// 5. 搜索功能 [XPTV 规范: search(key, quick, pg)]
+async function search(key, quick, pg = 1) {
+    let text = encodeURIComponent(key)
     let url = `${BASE_URL}/search/wd/${text}.html`
     let cards = []
 
@@ -187,7 +178,6 @@ async function search(ext) {
         const { data } = await $fetch.get(url, { headers: DEFAULT_HEADERS })
         const $ = cheerio.load(data)
 
-        // 精准匹配源码中的 #searchList li 容器
         $('#searchList li').each((i, el) => {
             const $item = $(el)
             const title = $item.find('.detail .title a').text().trim()
@@ -200,8 +190,7 @@ async function search(ext) {
                     vod_id: href,
                     vod_name: title,
                     vod_pic: pic && pic.startsWith('/') ? BASE_URL + pic : pic,
-                    vod_remarks: remarks,
-                    ext: { id: href }
+                    vod_remarks: remarks
                 })
             }
         })
