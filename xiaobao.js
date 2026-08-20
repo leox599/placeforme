@@ -3,14 +3,53 @@
  */
 
 const cheerio = createCheerio()
+const CryptoJS = createCryptoJS()
 
-const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.3'
 const BASE_URL = 'https://www.xiaobaotv.tv'
 
-const HEADERS = {
+const DEFAULT_HEADERS = {
     'User-Agent': UA,
     'Referer': BASE_URL + '/',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+}
+
+let appConfig = {
+    ver: 1,
+    title: '小宝影院',
+    site: BASE_URL,
+    tabs: [
+        {
+            name: '电影',
+            ext: {
+                id: '1',
+            },
+        },
+        {
+            name: '电视剧',
+            ext: {
+                id: '2',
+            },
+        },
+        {
+            name: '综艺',
+            ext: {
+                id: '3',
+            },
+        },
+        {
+            name: '动漫',
+            ext: {
+                id: '4',
+            },
+        },
+        {
+            name: '短剧',
+            ext: {
+                id: '5',
+            },
+        },
+    ],
 }
 
 function fixUrl(url) {
@@ -21,34 +60,28 @@ function fixUrl(url) {
     return BASE_URL + '/' + url
 }
 
-// 1. 首页与分类
-async function home() {
-    return jsonify({
-        class: [
-            { type_id: '1', type_name: '电影' },
-            { type_id: '2', type_name: '电视剧' },
-            { type_id: '3', type_name: '综艺' },
-            { type_id: '4', type_name: '动漫' },
-            { type_id: '5', type_name: '短剧' }
-        ]
-    })
+// 1. 获取配置
+async function getConfig() {
+    return jsonify(appConfig)
 }
 
-// 2. 分类列表
-async function category(tid, pg = 1, filter, extend) {
-    let url = (parseInt(pg) > 1) ? `${BASE_URL}/movie/type/${tid}/page/${pg}.html` : `${BASE_URL}/movie/type/${tid}.html`
+// 2. 获取分类列表
+async function getCards(ext) {
+    ext = argsify(ext)
     let cards = []
+    let { id, page = 1 } = ext
+    let url = (parseInt(page) > 1) ? `${BASE_URL}/movie/type/${id}/page/${page}.html` : `${BASE_URL}/movie/type/${id}.html`
 
     try {
-        const res = await $fetch.get(url, { headers: HEADERS })
-        const $ = cheerio.load(res.data || '')
+        const { data } = await $fetch.get(url, { headers: DEFAULT_HEADERS })
+        const $ = cheerio.load(data)
 
-        $('.myui-vodlist li, #searchList li').each((i, el) => {
+        $('.myui-vodlist li').each((i, el) => {
             const $item = $(el)
-            const $a = $item.find('a.myui-vodlist__thumb, .detail .title a').first()
+            const $a = $item.find('a.myui-vodlist__thumb').first()
             const title = $a.attr('title') || $item.find('.title a').text().trim()
             const href = $a.attr('href')
-            const pic = $item.find('.myui-vodlist__thumb').attr('data-original') || $item.find('img').attr('src')
+            const pic = $a.attr('data-original') || $item.find('img').attr('src')
             const remarks = $item.find('.pic-text').text().trim()
 
             if (title && href) {
@@ -56,78 +89,85 @@ async function category(tid, pg = 1, filter, extend) {
                     vod_id: href,
                     vod_name: title,
                     vod_pic: fixUrl(pic),
-                    vod_remarks: remarks
+                    vod_remarks: remarks,
+                    ext: {
+                        href: href,
+                    },
                 })
             }
         })
     } catch (e) {
-        $print(`category Error: ${e}`)
+        $print(`getCards Error: ${e}`)
     }
 
     return jsonify({
-        page: parseInt(pg),
-        pagecount: 99,
-        limit: cards.length,
-        total: 999,
-        list: cards
+        list: cards,
     })
 }
 
-// 3. 详情与剧集
-async function detail(id) {
-    let detailUrl = fixUrl(id)
-    let playFrom = []
-    let playList = []
+// 3. 获取剧集选集
+async function getTracks(ext) {
+    ext = argsify(ext)
+    let href = ext.href
+    let detailUrl = fixUrl(href)
+    let tracks = []
 
     try {
-        const res = await $fetch.get(detailUrl, { headers: HEADERS })
-        const $ = cheerio.load(res.data || '')
+        const { data } = await $fetch.get(detailUrl, { headers: DEFAULT_HEADERS })
+        const $ = cheerio.load(data)
 
-        let tracks = []
         $('.myui-content__list li a, .playlist li a').each((i, el) => {
             const name = $(el).text().trim()
-            const href = $(el).attr('href')
-            if (name && href) {
-                tracks.push(`${name}$${href}`)
+            const playHref = $(el).attr('href')
+            if (name && playHref) {
+                tracks.push({
+                    name: name,
+                    pan: '',
+                    ext: {
+                        playUrl: playHref,
+                    },
+                })
             }
         })
 
         if (tracks.length === 0) {
             const playBtn = $('a.btn-warm').attr('href')
             if (playBtn) {
-                tracks.push(`播放正片$${playBtn}`)
+                tracks.push({
+                    name: '立即播放',
+                    pan: '',
+                    ext: {
+                        playUrl: playBtn,
+                    },
+                })
             }
         }
-
-        playFrom.push('小宝专线')
-        playList.push(tracks.join('#'))
-
-        const vod = {
-            vod_id: id,
-            vod_name: $('.myui-content__detail .title').text().trim() || '未知',
-            vod_pic: fixUrl($('.myui-content__thumb .lazyload').attr('data-original')),
-            vod_play_from: playFrom.join('$$$'),
-            vod_play_url: playList.join('$$$')
-        }
-
-        return jsonify({ list: [vod] })
     } catch (e) {
-        $print(`detail Error: ${e}`)
-        return jsonify({ list: [] })
+        $print(`getTracks Error: ${e}`)
     }
+
+    return jsonify({
+        list: [
+            {
+                title: '默认线路',
+                tracks: tracks,
+            },
+        ],
+    })
 }
 
-// 4. 获取播放地址
-async function play(flag, id, flags) {
-    let url = fixUrl(id)
+// 4. 获取播放直链
+async function getPlayinfo(ext) {
+    ext = argsify(ext)
+    let playUrl = ext.playUrl
+    let url = fixUrl(playUrl)
     let realVideoUrl = ''
 
     try {
-        const res = await $fetch.get(url, { headers: HEADERS })
-        const html = res.data || ''
+        const { data } = await $fetch.get(url, { headers: DEFAULT_HEADERS })
 
-        // 提取播放器脚本配置
-        const match = html.match(/var\s+(?:player_aaaa|player_data)\s*=\s*(\{.*?\});/)
+        // 提取 var player_aaaa 或 player_data 变量
+        const match = data.match(/var\s+(?:player_aaaa|player_data)\s*=\s*(\{.*?\});/)
         if (match && match[1]) {
             const playConfig = argsify(match[1])
             let rawUrl = playConfig.url
@@ -136,15 +176,17 @@ async function play(flag, id, flags) {
                 if (!rawUrl.startsWith('http') && !rawUrl.includes('.m3u8')) {
                     try {
                         rawUrl = decodeURIComponent(atob(rawUrl))
-                    } catch (e) {}
+                    } catch (e) {
+                        $print(`Base64 Decode Error: ${e}`)
+                    }
                 }
                 realVideoUrl = fixUrl(rawUrl)
             }
         }
 
-        // iframe 备用提取
+        // 备用：查找 iframe 播放器
         if (!realVideoUrl) {
-            const $ = cheerio.load(html)
+            const $ = cheerio.load(data)
             const iframeSrc = $('iframe').attr('src')
             if (iframeSrc) {
                 if (iframeSrc.includes('url=')) {
@@ -155,32 +197,33 @@ async function play(flag, id, flags) {
             }
         }
     } catch (e) {
-        $print(`play Error: ${e}`)
+        $print(`getPlayinfo Error: ${e}`)
     }
 
     return jsonify({
-        parse: 0,
-        url: realVideoUrl,
-        header: {
+        urls: [realVideoUrl],
+        headers: {
             'User-Agent': UA,
-            'Referer': BASE_URL + '/'
-        }
+            'Referer': BASE_URL + '/',
+        },
     })
 }
 
-// 5. 搜索
-async function search(key, quick, pg = 1) {
-    let text = encodeURIComponent(key)
-    let url = `${BASE_URL}/search/wd/${text}.html`
+// 5. 搜索功能
+async function search(ext) {
+    ext = argsify(ext)
     let cards = []
+    const text = encodeURIComponent(ext.text)
+    const url = `${BASE_URL}/search/wd/${text}.html`
 
     try {
-        const res = await $fetch.get(url, { headers: HEADERS })
-        const $ = cheerio.load(res.data || '')
+        const { data } = await $fetch.get(url, { headers: DEFAULT_HEADERS })
+        const $ = cheerio.load(data)
 
-        $('#searchList li, .myui-vodlist__media li').each((i, el) => {
+        // 针对刚才提供的小宝真实 HTML 中的 #searchList li 容器提取
+        $('#searchList li').each((i, el) => {
             const $item = $(el)
-            const title = $item.find('.detail .title a').text().trim() || $item.find('h4.title a').text().trim()
+            const title = $item.find('.detail .title a').text().trim()
             const href = $item.find('.detail .title a').attr('href') || $item.find('.thumb a').attr('href')
             const pic = $item.find('.myui-vodlist__thumb').attr('data-original')
             const remarks = $item.find('.pic-text').text().trim()
@@ -190,7 +233,10 @@ async function search(key, quick, pg = 1) {
                     vod_id: href,
                     vod_name: title,
                     vod_pic: fixUrl(pic),
-                    vod_remarks: remarks
+                    vod_remarks: remarks,
+                    ext: {
+                        href: href,
+                    },
                 })
             }
         })
@@ -198,5 +244,7 @@ async function search(key, quick, pg = 1) {
         $print(`search Error: ${e}`)
     }
 
-    return jsonify({ list: cards })
+    return jsonify({
+        list: cards,
+    })
 }
