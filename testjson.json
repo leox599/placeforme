@@ -1,7 +1,7 @@
 {
   "sites": [
     {
-      "key": "xiaobao_tv",
+      "key": "xiaobaotv",
       "name": "小宝影院",
       "type": 3,
       "api": "https://raw.githubusercontent.com/leox599/placeforme/refs/heads/main/xiaobao.js",
